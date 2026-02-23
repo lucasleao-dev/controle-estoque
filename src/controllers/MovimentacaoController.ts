@@ -1,19 +1,47 @@
 import { Request, Response } from 'express';
 import { produtos } from './ProdutoController';
-import { usuarios } from './UsuarioController';
 import { Movimentacao } from '../models/Movimentacao';
 
-let movimentacoes: Movimentacao[] = [];
+export let movimentacoes: Movimentacao[] = [];
 let nextIdMov = 1;
 
-// Listar todas movimentações (admin) ou do próprio usuário
+// Listar todas movimentações (admin) ou do próprio usuário, com filtros por produto/data
 export const listarMovimentacoes = (req: Request, res: Response) => {
     const user = (req as any).user;
-    if (user.perfil === 'admin') {
-        return res.json(movimentacoes);
-    } else {
-        return res.json(movimentacoes.filter(m => m.usuario_id === user.id));
+    const { produto_id, data_inicio, data_fim } = req.query;
+
+    let filtradas = [...movimentacoes];
+
+    // Filtro por usuário operacional
+    if (user.perfil !== 'admin') {
+        filtradas = filtradas.filter(m => m.usuario_id === user.id);
     }
+
+    // Filtro por produto
+    if (produto_id) {
+        filtradas = filtradas.filter(m => m.produto_id === Number(produto_id));
+    }
+
+    // Filtro por datas
+    if (data_inicio) {
+        const inicio = new Date(data_inicio as string);
+        filtradas = filtradas.filter(m => m.data_hora >= inicio);
+    }
+    if (data_fim) {
+        const fim = new Date(data_fim as string);
+        filtradas = filtradas.filter(m => m.data_hora <= fim);
+    }
+
+    // Adiciona flag estoque_baixo
+    const resultado = filtradas.map(m => {
+        const produto = produtos.find(p => p.id === m.produto_id);
+        return {
+            ...m,
+            estoque_baixo: produto ? produto.estoque_atual < produto.estoque_minimo : false
+        };
+    });
+
+    res.json(resultado);
 };
 
 // Registrar movimentação (entrada/saída)
