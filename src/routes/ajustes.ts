@@ -4,10 +4,10 @@ import { listarAjustes, ajustarEstoque } from '../controllers/AjusteEstoqueContr
 
 const router = Router();
 
-// listar ajustes (autenticado)
+// Listar ajustes (qualquer usuário autenticado)
 router.get('/', autenticar, listarAjustes);
 
-// ajustar estoque (somente admin)
+// Registrar ajuste de estoque (somente admin)
 router.post('/', autenticar, adminOnly, ajustarEstoque);
 
 export default router;

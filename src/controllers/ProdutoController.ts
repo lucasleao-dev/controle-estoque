@@ -1,67 +1,98 @@
 import { Request, Response } from 'express';
-import { Produto } from '../models/Produto';
+import { getConnection } from '../db/oracle';
+import oracledb from 'oracledb';
 
-// Array em memória inicial
-let produtos: Produto[] = [];
-let nextId = 1;
+export interface Produto {
+    id: number;
+    nome: string;
+    codigo?: string;
+    categoria: string;
+    unidade_medida: string;
+    estoque_atual: number;
+    estoque_minimo: number;
+    ativo: number;
+    data_criacao?: Date;
+}
 
-export const listarProdutos = (req: Request, res: Response) => {
-    res.json(produtos);
+export let produtos: Produto[] = [];
+
+// Listar produtos
+export const listarProdutos = async (req: Request, res: Response) => {
+    try {
+        const conn = await getConnection();
+        const result = await conn.execute(
+            `SELECT id, nome, codigo, categoria, unidade_medida, estoque_atual, estoque_minimo, ativo, data_criacao 
+             FROM produtos WHERE ativo = 1`,
+            [],
+            { outFormat: oracledb.OUT_FORMAT_OBJECT } // importante para vir como objeto
+        );
+
+        produtos = (result.rows as any[]).map((row) => ({
+            id: row.ID,
+            nome: row.NOME,
+            codigo: row.CODIGO,
+            categoria: row.CATEGORIA,
+            unidade_medida: row.UNIDADE_MEDIDA,
+            estoque_atual: row.ESTOQUE_ATUAL,
+            estoque_minimo: row.ESTOQUE_MINIMO,
+            ativo: row.ATIVO,
+            data_criacao: row.DATA_CRIACAO
+        }));
+
+        await conn.close();
+        res.json(produtos);
+    } catch (err) {
+        res.status(500).json({ erro: 'Erro ao listar produtos', detalhes: err });
+    }
 };
 
-export const criarProduto = (req: Request, res: Response) => {
+// Criar produto
+export const criarProduto = async (req: Request, res: Response) => {
     const { nome, codigo, categoria, unidade_medida, estoque_atual, estoque_minimo } = req.body;
 
-    if (!nome || !codigo || !categoria || !unidade_medida || estoque_atual == null || estoque_minimo == null) {
-        return res.status(400).json({ erro: 'Todos os campos são obrigatórios.' });
+    if (!nome || !categoria || !unidade_medida)
+        return res.status(400).json({ erro: 'Campos obrigatórios faltando.' });
+
+    try {
+        const conn = await getConnection();
+
+        // Tipando o outBinds corretamente
+        const result = await conn.execute(
+            `INSERT INTO produtos 
+            (nome, codigo, categoria, unidade_medida, estoque_atual, estoque_minimo)
+            VALUES (:nome, :codigo, :categoria, :unidade_medida, :estoque_atual, :estoque_minimo)
+            RETURNING id INTO :id`,
+            {
+                nome,
+                codigo,
+                categoria,
+                unidade_medida,
+                estoque_atual,
+                estoque_minimo,
+                id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
+            },
+            { autoCommit: true }
+        );
+
+        // ⚡ Aqui garantimos que o TypeScript entende que outBinds tem id
+        const novoId = (result.outBinds as { id: number[] }).id[0];
+
+        const novoProduto: Produto = {
+            id: novoId,
+            nome,
+            codigo,
+            categoria,
+            unidade_medida,
+            estoque_atual,
+            estoque_minimo,
+            ativo: 1
+        };
+
+        produtos.push(novoProduto);
+        await conn.close();
+
+        res.status(201).json(novoProduto);
+    } catch (err) {
+        res.status(500).json({ erro: 'Erro ao criar produto', detalhes: err });
     }
-
-    const novoProduto: Produto = {
-        id: nextId++,
-        nome,
-        codigo,
-        categoria,
-        unidade_medida,
-        estoque_atual,
-        estoque_minimo,
-        ativo: true,
-        data_criacao: new Date(),
-    };
-
-    produtos.push(novoProduto);
-    res.status(201).json(novoProduto);
 };
-
-export const atualizarProduto = (req: Request, res: Response) => {
-    // ✅ Verifica se o body existe e não está vazio
-    if (!req.body || Object.keys(req.body).length === 0) {
-        return res.status(400).json({ erro: 'Body vazio ou inválido' });
-    }
-
-    const { id } = req.params;
-    const produto = produtos.find(p => p.id === Number(id));
-
-    if (!produto) return res.status(404).json({ erro: 'Produto não encontrado.' });
-
-    // Atualiza apenas os campos enviados no body
-    if (req.body.nome !== undefined) produto.nome = req.body.nome;
-    if (req.body.codigo !== undefined) produto.codigo = req.body.codigo;
-    if (req.body.categoria !== undefined) produto.categoria = req.body.categoria;
-    if (req.body.unidade_medida !== undefined) produto.unidade_medida = req.body.unidade_medida;
-    if (req.body.estoque_atual !== undefined) produto.estoque_atual = req.body.estoque_atual;
-    if (req.body.estoque_minimo !== undefined) produto.estoque_minimo = req.body.estoque_minimo;
-    if (req.body.ativo !== undefined) produto.ativo = req.body.ativo;
-
-    res.json(produto);
-};
-
-export const deletarProduto = (req: Request, res: Response) => {
-    const { id } = req.params;
-    const index = produtos.findIndex(p => p.id === Number(id));
-
-    if (index === -1) return res.status(404).json({ erro: 'Produto não encontrado.' });
-
-    produtos[index].ativo = false; // apenas inativamos
-    res.json({ mensagem: 'Produto inativado com sucesso.' });
-};
-export { produtos };
