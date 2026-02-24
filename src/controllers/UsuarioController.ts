@@ -3,8 +3,10 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { getConnection } from '../db/oracle';
 import oracledb from 'oracledb';
+
 const JWT_SECRET = process.env.JWT_SECRET || 'minha_chave_secreta';
 
+// LISTAR USUÁRIOS (teste)
 export const listarUsuarios = async (req: Request, res: Response) => {
   try {
     const conn = await getConnection();
@@ -20,28 +22,36 @@ export const listarUsuarios = async (req: Request, res: Response) => {
   }
 };
 
+// CRIAR USUÁRIO
 export const criarUsuario = async (req: Request, res: Response) => {
   const { nome, email, senha, perfil } = req.body;
-  if (!nome || !email || !senha || !perfil)
+
+  if (!nome || !email || !senha || !perfil) {
     return res.status(400).json({ erro: 'Todos os campos são obrigatórios.' });
+  }
 
   try {
     const conn = await getConnection();
+
+    // Verifica se já existe email
     const check = await conn.execute(
       `SELECT id FROM usuarios WHERE email = :email`,
       [email],
       { outFormat: oracledb.OUT_FORMAT_OBJECT }
     );
+
     if (check.rows && check.rows.length > 0) {
       await conn.close();
       return res.status(409).json({ erro: 'Email já cadastrado.' });
     }
 
+    // Criptografa a senha
     const senhaHash = await bcrypt.hash(senha, 10);
 
     const result = await conn.execute(
       `INSERT INTO usuarios (nome, email, senha, perfil)
-       VALUES (:nome, :email, :senha, :perfil) RETURNING id INTO :id`,
+       VALUES (:nome, :email, :senha, :perfil)
+       RETURNING id INTO :id`,
       {
         nome,
         email,
@@ -61,8 +71,10 @@ export const criarUsuario = async (req: Request, res: Response) => {
   }
 };
 
+// LOGIN
 export const loginUsuario = async (req: Request, res: Response) => {
   const { email, senha } = req.body;
+
   if (!email || !senha) return res.status(400).json({ erro: 'Email e senha são obrigatórios.' });
 
   try {
