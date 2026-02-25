@@ -8,7 +8,7 @@ import movimentacoesRoutes from './routes/movimentacoes';
 import ajustesRoutes from './routes/ajustes';
 dotenv.config();
 import dashboardRoutes from './routes/dashboard';
-
+import produtoRoutes from './routes/produtoRoutesAntigo';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -22,6 +22,7 @@ app.use('/usuarios', usuariosRoutes);
 app.use('/movimentacoes', movimentacoesRoutes);
 app.use('/ajustes', ajustesRoutes);
 app.use('/dashboard', dashboardRoutes);
+app.use('/produtos', produtoRoutes);
 app.get('/', (req: Request, res: Response) => {
     res.send('API Controle de Estoque funcionando!');
 });
