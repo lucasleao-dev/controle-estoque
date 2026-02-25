@@ -96,3 +96,60 @@ export const criarProduto = async (req: Request, res: Response) => {
         res.status(500).json({ erro: 'Erro ao criar produto', detalhes: err });
     }
 };
+// Atualizar produto
+export const atualizarProduto = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { nome, codigo, categoria, unidade_medida, estoque_atual, estoque_minimo, ativo } = req.body;
+
+    try {
+        const conn = await getConnection();
+
+        await conn.execute(
+            `UPDATE produtos SET
+                nome = :nome,
+                codigo = :codigo,
+                categoria = :categoria,
+                unidade_medida = :unidade_medida,
+                estoque_atual = :estoque_atual,
+                estoque_minimo = :estoque_minimo,
+                ativo = :ativo
+             WHERE id = :id`,
+            {
+                id: Number(id),
+                nome,
+                codigo,
+                categoria,
+                unidade_medida,
+                estoque_atual,
+                estoque_minimo,
+                ativo
+            },
+            { autoCommit: true }
+        );
+
+        await conn.close();
+        res.json({ mensagem: 'Produto atualizado com sucesso.' });
+    } catch (err) {
+        res.status(500).json({ erro: 'Erro ao atualizar produto', detalhes: err });
+    }
+};
+
+// Deletar produto (soft delete)
+export const deletarProduto = async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    try {
+        const conn = await getConnection();
+
+        await conn.execute(
+            `UPDATE produtos SET ativo = 0 WHERE id = :id`,
+            { id: Number(id) },
+            { autoCommit: true }
+        );
+
+        await conn.close();
+        res.json({ mensagem: 'Produto desativado com sucesso.' });
+    } catch (err) {
+        res.status(500).json({ erro: 'Erro ao deletar produto', detalhes: err });
+    }
+};
