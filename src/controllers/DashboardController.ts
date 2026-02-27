@@ -1,4 +1,3 @@
-// controllers/DashboardController.ts
 import { Request, Response } from 'express';
 import { getConnection } from '../db/oracle';
 import oracledb from 'oracledb';
@@ -69,11 +68,37 @@ export const obterDashboard = async (req: Request, res: Response) => {
         m.ESTOQUE_ATUAL < m.ESTOQUE_MINIMO
     }));
 
+    // Entradas e saídas do dia
+    const hoje = new Date();
+    const dataHoje = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2,'0')}-${String(hoje.getDate()).padStart(2,'0')}`;
+
+    const entradasHojeResult = await conn.execute<{TOTAL: number}>(
+      `SELECT SUM(QUANTIDADE) AS TOTAL
+       FROM MOVIMENTACOES
+       WHERE TIPO='entrada' AND TRUNC(DATA_MOVIMENTACAO) = TO_DATE(:data, 'YYYY-MM-DD')`,
+      [dataHoje],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    const entradasHoje = entradasHojeResult.rows?.[0]?.TOTAL || 0;
+
+    const saidasHojeResult = await conn.execute<{TOTAL: number}>(
+      `SELECT SUM(QUANTIDADE) AS TOTAL
+       FROM MOVIMENTACOES
+       WHERE TIPO='saida' AND TRUNC(DATA_MOVIMENTACAO) = TO_DATE(:data, 'YYYY-MM-DD')`,
+      [dataHoje],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    const saidasHoje = saidasHojeResult.rows?.[0]?.TOTAL || 0;
+
+    // Retorna JSON completo
     res.json({
       totalProdutos,
       produtosEstoqueBaixo,
-      ultimasMovimentacoes
+      ultimasMovimentacoes,
+      entradasHoje,
+      saidasHoje
     });
+
   } catch (err) {
     console.error('Erro ao obter dashboard:', err);
     res.status(500).json({ erro: 'Erro ao obter dashboard', detalhes: err });

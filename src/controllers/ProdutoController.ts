@@ -15,7 +15,7 @@ export const listarProdutos = async (req: Request, res: Response) => {
 
         const result = await conn.execute(
             `SELECT ID, NOME, CODIGO_BARRAS AS CODIGO, CATEGORIA, UNIDADE_MEDIDA, 
-                    QUANTIDADE AS ESTOQUE_ATUAL, ESTOQUE_MINIMO, ATIVO, DATA_CRIACAO
+                    ESTOQUE_ATUAL, ESTOQUE_MINIMO, ATIVO, DATA_CRIACAO
              FROM PRODUTOS
              WHERE ATIVO = 'S'`,
             [],
@@ -35,7 +35,14 @@ export const listarProdutos = async (req: Request, res: Response) => {
 
 // Criar produto
 export const criarProduto = async (req: Request, res: Response) => {
-    const { nome, codigo, categoria, unidade_medida, estoque_atual, estoque_minimo } = req.body;
+    const {
+        nome,
+        codigo,
+        categoria,
+        unidade_medida,
+        estoque_atual = 0,   // ✅ proteção contra null
+        estoque_minimo = 0   // ✅ proteção contra null
+    } = req.body;
 
     if (!nome || !categoria || !unidade_medida) {
         return res.status(400).json({ erro: 'Campos obrigatórios faltando.' });
@@ -45,8 +52,26 @@ export const criarProduto = async (req: Request, res: Response) => {
         const conn = await getConnection();
 
         const result = await conn.execute(
-            `INSERT INTO PRODUTOS (NOME, CODIGO_BARRAS, CATEGORIA, UNIDADE_MEDIDA, QUANTIDADE, ESTOQUE_MINIMO)
-             VALUES (:nome, :codigo, :categoria, :unidade_medida, :estoque_atual, :estoque_minimo)
+            `INSERT INTO PRODUTOS (
+                NOME,
+                CODIGO_BARRAS,
+                CATEGORIA,
+                UNIDADE_MEDIDA,
+                ESTOQUE_ATUAL,
+                ESTOQUE_MINIMO,
+                ATIVO,
+                DATA_CRIACAO
+            )
+             VALUES (
+                :nome,
+                :codigo,
+                :categoria,
+                :unidade_medida,
+                :estoque_atual,
+                :estoque_minimo,
+                'S',
+                SYSDATE
+            )
              RETURNING ID INTO :id`,
             {
                 nome,
@@ -98,7 +123,7 @@ export const atualizarProduto = async (req: Request, res: Response) => {
                 CODIGO_BARRAS = :codigo,
                 CATEGORIA = :categoria,
                 UNIDADE_MEDIDA = :unidade_medida,
-                QUANTIDADE = :estoque_atual,
+                ESTOQUE_ATUAL = :estoque_atual,
                 ESTOQUE_MINIMO = :estoque_minimo,
                 ATIVO = :ativo
              WHERE ID = :id`,
@@ -118,7 +143,16 @@ export const atualizarProduto = async (req: Request, res: Response) => {
         // Atualiza também na memória
         const index = produtos.findIndex(p => p.id === Number(id));
         if (index !== -1) {
-            produtos[index] = { ...produtos[index], nome, codigo, categoria, unidade_medida, estoque_atual, estoque_minimo, ativo: ativo ? true : false };
+            produtos[index] = { 
+                ...produtos[index], 
+                nome, 
+                codigo, 
+                categoria, 
+                unidade_medida, 
+                estoque_atual, 
+                estoque_minimo, 
+                ativo: ativo ? true : false 
+            };
         }
 
         await conn.close();

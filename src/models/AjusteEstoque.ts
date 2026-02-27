@@ -4,6 +4,6 @@ export interface AjusteEstoque {
   quantidade_anterior: number;
   quantidade_nova: number;
   motivo: string;
-  usuario_id: number; 
+  usuario_id: number;  // adiciona usuário que fez o ajuste
   data_hora: Date;
 }
