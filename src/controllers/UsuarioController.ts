@@ -14,7 +14,7 @@ export const listarUsuarios = async (req: Request, res: Response) => {
     conn = await getConnection();
 
     const result = await conn.execute(
-      `SELECT id, nome, email, perfil, ativo, data_criacao
+      `SELECT id, nome, email, senha, perfil, ativo
        FROM usuarios`,
       [],
       { outFormat: oracledb.OUT_FORMAT_OBJECT }
@@ -52,7 +52,7 @@ export const criarUsuario = async (req: Request, res: Response) => {
     // Verifica se já existe email
     const check = await conn.execute(
       `SELECT id FROM usuarios WHERE LOWER(email) = LOWER(:email)`,
-      [emailNormalizado],
+      { email: emailNormalizado },
       { outFormat: oracledb.OUT_FORMAT_OBJECT }
     );
 
@@ -77,7 +77,6 @@ export const criarUsuario = async (req: Request, res: Response) => {
       { autoCommit: true }
     );
 
-    // ✅ Tipagem segura do outBinds
     const novoId = (result.outBinds as { id: number[] }).id[0];
 
     return res.status(201).json({
@@ -119,23 +118,44 @@ export const loginUsuario = async (req: Request, res: Response) => {
       `SELECT id, nome, email, senha, perfil, ativo
        FROM usuarios
        WHERE LOWER(email) = LOWER(:email)`,
-      [emailNormalizado],
+      { email: emailNormalizado },
       { outFormat: oracledb.OUT_FORMAT_OBJECT }
     );
 
+    console.log('DEBUG LOGIN result.rows:', result.rows);
+
     if (!result.rows || result.rows.length === 0) {
+      console.log('DEBUG LOGIN: usuário não encontrado');
       return res.status(401).json({ erro: 'Email ou senha inválidos.' });
     }
 
     const usuario = result.rows[0] as any;
 
-    if (usuario.ATIVO !== 'S') {
+    console.log('DEBUG LOGIN:', {
+      emailDigitado: emailNormalizado,
+      ativoBanco: usuario.ATIVO,
+      tipoAtivo: typeof usuario.ATIVO,
+      senhaDigitada: senha,
+      hashBancoInicio: usuario.SENHA?.substring(0, 25) + '...'
+    });
+
+    // 🔴 IMPORTANTE: aceita 1 ou 'S'
+    const ativoOk =
+      usuario.ATIVO === 1 ||
+      usuario.ATIVO === '1' ||
+      usuario.ATIVO === 'S';
+
+    if (!ativoOk) {
+      console.log('DEBUG LOGIN: usuário inativo');
       return res.status(401).json({ erro: 'Email ou senha inválidos.' });
     }
 
     const senhaValida = await bcrypt.compare(senha, usuario.SENHA);
 
+    console.log('DEBUG LOGIN: senhaValida =', senhaValida);
+
     if (!senhaValida) {
+      console.log('DEBUG LOGIN: senha inválida');
       return res.status(401).json({ erro: 'Email ou senha inválidos.' });
     }
 
@@ -152,6 +172,8 @@ export const loginUsuario = async (req: Request, res: Response) => {
         audience: 'controle-estoque-app'
       }
     );
+
+    console.log('DEBUG LOGIN: login OK');
 
     return res.json({
       token,
