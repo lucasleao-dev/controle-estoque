@@ -5,6 +5,9 @@ import oracledb from 'oracledb';
 import { Produto } from '../models/Produto';
 import { ProdutoModel } from '../models/ProdutoModel';
 
+// Mantemos uma lista em memória para facilitar o AjusteEstoqueController
+export let produtos: Produto[] = [];
+
 // Listar todos produtos ativos
 export const listarProdutos = async (req: Request, res: Response) => {
     try {
@@ -20,7 +23,7 @@ export const listarProdutos = async (req: Request, res: Response) => {
         );
 
         // Mapeando diretamente para ProdutoModel
-        const produtos: Produto[] = (result.rows || []).map(row => new ProdutoModel(row));
+        produtos = (result.rows || []).map(row => new ProdutoModel(row));
 
         await conn.close();
         res.json(produtos);
@@ -71,6 +74,8 @@ export const criarProduto = async (req: Request, res: Response) => {
             DATA_CRIACAO: new Date()
         });
 
+        produtos.push(novoProduto); // adiciona na lista em memória
+
         await conn.close();
         res.status(201).json(novoProduto);
     } catch (err) {
@@ -110,6 +115,12 @@ export const atualizarProduto = async (req: Request, res: Response) => {
             { autoCommit: true }
         );
 
+        // Atualiza também na memória
+        const index = produtos.findIndex(p => p.id === Number(id));
+        if (index !== -1) {
+            produtos[index] = { ...produtos[index], nome, codigo, categoria, unidade_medida, estoque_atual, estoque_minimo, ativo: ativo ? true : false };
+        }
+
         await conn.close();
         res.json({ mensagem: 'Produto atualizado com sucesso.' });
     } catch (err) {
@@ -131,6 +142,10 @@ export const deletarProduto = async (req: Request, res: Response) => {
             { autoCommit: true }
         );
 
+        // Atualiza na memória
+        const index = produtos.findIndex(p => p.id === Number(id));
+        if (index !== -1) produtos[index].ativo = false;
+
         await conn.close();
         res.json({ mensagem: 'Produto desativado com sucesso.' });
     } catch (err) {
@@ -138,3 +153,6 @@ export const deletarProduto = async (req: Request, res: Response) => {
         res.status(500).json({ erro: 'Erro ao deletar produto', detalhes: err });
     }
 };
+
+// Exporta Produto para AjusteEstoqueController
+export { Produto };
