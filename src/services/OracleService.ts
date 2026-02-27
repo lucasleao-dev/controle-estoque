@@ -6,7 +6,7 @@ import oracledb from 'oracledb';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'minha_chave_secreta';
 
-// ===== LISTAR USUÁRIOS (teste/admin) =====
+// LISTAR USUÁRIOS (teste/admin)
 export const listarUsuarios = async (req: Request, res: Response) => {
   let conn;
 
@@ -23,7 +23,9 @@ export const listarUsuarios = async (req: Request, res: Response) => {
     return res.json(result.rows);
   } catch (err) {
     console.error('Erro ao listar usuários:', err);
-    return res.status(500).json({ erro: 'Erro ao listar usuários' });
+    return res.status(500).json({
+      erro: 'Erro ao listar usuários'
+    });
   } finally {
     if (conn) {
       try {
@@ -35,12 +37,14 @@ export const listarUsuarios = async (req: Request, res: Response) => {
   }
 };
 
-// ===== CRIAR USUÁRIO =====
+// CRIAR USUÁRIO
 export const criarUsuario = async (req: Request, res: Response) => {
   const { nome, email, senha, perfil } = req.body;
 
   if (!nome || !email || !senha || !perfil) {
-    return res.status(400).json({ erro: 'Todos os campos são obrigatórios.' });
+    return res.status(400).json({
+      erro: 'Todos os campos são obrigatórios.'
+    });
   }
 
   let conn;
@@ -57,7 +61,9 @@ export const criarUsuario = async (req: Request, res: Response) => {
     );
 
     if (check.rows && check.rows.length > 0) {
-      return res.status(409).json({ erro: 'Email já cadastrado.' });
+      return res.status(409).json({
+        erro: 'Email já cadastrado.'
+      });
     }
 
     // Criptografa a senha
@@ -77,8 +83,9 @@ export const criarUsuario = async (req: Request, res: Response) => {
       { autoCommit: true }
     );
 
-    // ✅ Tipagem segura do outBinds
-    const novoId = (result.outBinds as { id: number[] }).id[0];
+    // 🔹 Ajuste seguro para o TypeScript: tipando outBinds
+    const outBinds = result.outBinds as { id: number[] } | undefined;
+    const novoId = outBinds?.id[0];
 
     return res.status(201).json({
       id: novoId,
@@ -89,7 +96,9 @@ export const criarUsuario = async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('Erro ao criar usuário:', err);
-    return res.status(500).json({ erro: 'Erro ao criar usuário' });
+    return res.status(500).json({
+      erro: 'Erro ao criar usuário'
+    });
   } finally {
     if (conn) {
       try {
@@ -101,18 +110,21 @@ export const criarUsuario = async (req: Request, res: Response) => {
   }
 };
 
-// ===== LOGIN =====
+// LOGIN
 export const loginUsuario = async (req: Request, res: Response) => {
   const { email, senha } = req.body;
 
   if (!email || !senha) {
-    return res.status(400).json({ erro: 'Email e senha são obrigatórios.' });
+    return res.status(400).json({
+      erro: 'Email e senha são obrigatórios.'
+    });
   }
 
   let conn;
 
   try {
     const emailNormalizado = email.trim().toLowerCase();
+
     conn = await getConnection();
 
     const result = await conn.execute(
@@ -124,19 +136,25 @@ export const loginUsuario = async (req: Request, res: Response) => {
     );
 
     if (!result.rows || result.rows.length === 0) {
-      return res.status(401).json({ erro: 'Email ou senha inválidos.' });
+      return res.status(401).json({
+        erro: 'Email ou senha inválidos.'
+      });
     }
 
     const usuario = result.rows[0] as any;
 
     if (usuario.ATIVO !== 'S') {
-      return res.status(401).json({ erro: 'Email ou senha inválidos.' });
+      return res.status(401).json({
+        erro: 'Email ou senha inválidos.'
+      });
     }
 
     const senhaValida = await bcrypt.compare(senha, usuario.SENHA);
 
     if (!senhaValida) {
-      return res.status(401).json({ erro: 'Email ou senha inválidos.' });
+      return res.status(401).json({
+        erro: 'Email ou senha inválidos.'
+      });
     }
 
     const token = jwt.sign(
@@ -164,7 +182,9 @@ export const loginUsuario = async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('Erro no login:', err);
-    return res.status(500).json({ erro: 'Erro interno ao fazer login.' });
+    return res.status(500).json({
+      erro: 'Erro interno ao fazer login.'
+    });
   } finally {
     if (conn) {
       try {

@@ -1,47 +1,31 @@
+// controllers/ProdutoController.ts
 import { Request, Response } from 'express';
 import { getConnection } from '../db/oracle';
 import oracledb from 'oracledb';
+import { Produto } from '../models/Produto';
+import { ProdutoModel } from '../models/ProdutoModel';
 
-export interface Produto {
-    id: number;
-    nome: string;
-    codigo?: string;
-    categoria: string;
-    unidade_medida: string;
-    estoque_atual: number;
-    estoque_minimo: number;
-    ativo: number;
-    data_criacao?: Date;
-}
-
-export let produtos: Produto[] = [];
-
-// Listar produtos
+// Listar todos produtos ativos
 export const listarProdutos = async (req: Request, res: Response) => {
     try {
         const conn = await getConnection();
+
         const result = await conn.execute(
-            `SELECT id, nome, codigo, categoria, unidade_medida, estoque_atual, estoque_minimo, ativo, data_criacao 
-             FROM produtos WHERE ativo = 1`,
+            `SELECT ID, NOME, CODIGO_BARRAS AS CODIGO, CATEGORIA, UNIDADE_MEDIDA, 
+                    QUANTIDADE AS ESTOQUE_ATUAL, ESTOQUE_MINIMO, ATIVO, DATA_CRIACAO
+             FROM PRODUTOS
+             WHERE ATIVO = 'S'`,
             [],
-            { outFormat: oracledb.OUT_FORMAT_OBJECT } // importante para vir como objeto
+            { outFormat: oracledb.OUT_FORMAT_OBJECT }
         );
 
-        produtos = (result.rows as any[]).map((row) => ({
-            id: row.ID,
-            nome: row.NOME,
-            codigo: row.CODIGO,
-            categoria: row.CATEGORIA,
-            unidade_medida: row.UNIDADE_MEDIDA,
-            estoque_atual: row.ESTOQUE_ATUAL,
-            estoque_minimo: row.ESTOQUE_MINIMO,
-            ativo: row.ATIVO,
-            data_criacao: row.DATA_CRIACAO
-        }));
+        // Mapeando diretamente para ProdutoModel
+        const produtos: Produto[] = (result.rows || []).map(row => new ProdutoModel(row));
 
         await conn.close();
         res.json(produtos);
     } catch (err) {
+        console.error('Erro ao listar produtos:', err);
         res.status(500).json({ erro: 'Erro ao listar produtos', detalhes: err });
     }
 };
@@ -50,18 +34,17 @@ export const listarProdutos = async (req: Request, res: Response) => {
 export const criarProduto = async (req: Request, res: Response) => {
     const { nome, codigo, categoria, unidade_medida, estoque_atual, estoque_minimo } = req.body;
 
-    if (!nome || !categoria || !unidade_medida)
+    if (!nome || !categoria || !unidade_medida) {
         return res.status(400).json({ erro: 'Campos obrigatórios faltando.' });
+    }
 
     try {
         const conn = await getConnection();
 
-        // Tipando o outBinds corretamente
         const result = await conn.execute(
-            `INSERT INTO produtos 
-            (nome, codigo, categoria, unidade_medida, estoque_atual, estoque_minimo)
-            VALUES (:nome, :codigo, :categoria, :unidade_medida, :estoque_atual, :estoque_minimo)
-            RETURNING id INTO :id`,
+            `INSERT INTO PRODUTOS (NOME, CODIGO_BARRAS, CATEGORIA, UNIDADE_MEDIDA, QUANTIDADE, ESTOQUE_MINIMO)
+             VALUES (:nome, :codigo, :categoria, :unidade_medida, :estoque_atual, :estoque_minimo)
+             RETURNING ID INTO :id`,
             {
                 nome,
                 codigo,
@@ -74,28 +57,28 @@ export const criarProduto = async (req: Request, res: Response) => {
             { autoCommit: true }
         );
 
-        // ⚡ Aqui garantimos que o TypeScript entende que outBinds tem id
         const novoId = (result.outBinds as { id: number[] }).id[0];
 
-        const novoProduto: Produto = {
-            id: novoId,
-            nome,
-            codigo,
-            categoria,
-            unidade_medida,
-            estoque_atual,
-            estoque_minimo,
-            ativo: 1
-        };
+        const novoProduto: Produto = new ProdutoModel({
+            ID: novoId,
+            NOME: nome,
+            CODIGO: codigo,
+            CATEGORIA: categoria,
+            UNIDADE_MEDIDA: unidade_medida,
+            ESTOQUE_ATUAL: estoque_atual,
+            ESTOQUE_MINIMO: estoque_minimo,
+            ATIVO: 'S',
+            DATA_CRIACAO: new Date()
+        });
 
-        produtos.push(novoProduto);
         await conn.close();
-
         res.status(201).json(novoProduto);
     } catch (err) {
+        console.error('Erro ao criar produto:', err);
         res.status(500).json({ erro: 'Erro ao criar produto', detalhes: err });
     }
 };
+
 // Atualizar produto
 export const atualizarProduto = async (req: Request, res: Response) => {
     const { id } = req.params;
@@ -105,15 +88,15 @@ export const atualizarProduto = async (req: Request, res: Response) => {
         const conn = await getConnection();
 
         await conn.execute(
-            `UPDATE produtos SET
-                nome = :nome,
-                codigo = :codigo,
-                categoria = :categoria,
-                unidade_medida = :unidade_medida,
-                estoque_atual = :estoque_atual,
-                estoque_minimo = :estoque_minimo,
-                ativo = :ativo
-             WHERE id = :id`,
+            `UPDATE PRODUTOS SET
+                NOME = :nome,
+                CODIGO_BARRAS = :codigo,
+                CATEGORIA = :categoria,
+                UNIDADE_MEDIDA = :unidade_medida,
+                QUANTIDADE = :estoque_atual,
+                ESTOQUE_MINIMO = :estoque_minimo,
+                ATIVO = :ativo
+             WHERE ID = :id`,
             {
                 id: Number(id),
                 nome,
@@ -122,7 +105,7 @@ export const atualizarProduto = async (req: Request, res: Response) => {
                 unidade_medida,
                 estoque_atual,
                 estoque_minimo,
-                ativo
+                ativo: ativo ? 'S' : 'N'
             },
             { autoCommit: true }
         );
@@ -130,6 +113,7 @@ export const atualizarProduto = async (req: Request, res: Response) => {
         await conn.close();
         res.json({ mensagem: 'Produto atualizado com sucesso.' });
     } catch (err) {
+        console.error('Erro ao atualizar produto:', err);
         res.status(500).json({ erro: 'Erro ao atualizar produto', detalhes: err });
     }
 };
@@ -142,7 +126,7 @@ export const deletarProduto = async (req: Request, res: Response) => {
         const conn = await getConnection();
 
         await conn.execute(
-            `UPDATE produtos SET ativo = 0 WHERE id = :id`,
+            `UPDATE PRODUTOS SET ATIVO = 'N' WHERE ID = :id`,
             { id: Number(id) },
             { autoCommit: true }
         );
@@ -150,6 +134,7 @@ export const deletarProduto = async (req: Request, res: Response) => {
         await conn.close();
         res.json({ mensagem: 'Produto desativado com sucesso.' });
     } catch (err) {
+        console.error('Erro ao deletar produto:', err);
         res.status(500).json({ erro: 'Erro ao deletar produto', detalhes: err });
     }
 };
